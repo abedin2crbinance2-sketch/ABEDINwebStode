@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TGBridge — Telegram Session Manager</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#08080e;--surface:#0f0f18;--card:#13131e;--border:#1c1c2e;--border2:#252538;
+  --tg:#2AABEE;--tg2:#1a7bb5;--accent:#7c6af7;--accent2:#5b4de0;
+  --success:#22c55e;--error:#ef4444;--warn:#f59e0b;
+  --text:#e8e8f2;--muted:#5a5a78;--muted2:#8888a8;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow-x:hidden}
+
+/* grid bg */
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(124,106,247,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(124,106,247,.025) 1px,transparent 1px);background-size:44px 44px;pointer-events:none;z-index:0}
+
+/* orbs */
+.orb{position:fixed;border-radius:50%;filter:blur(130px);pointer-events:none;z-index:0}
+.orb1{width:600px;height:600px;background:rgba(42,171,238,.05);top:-150px;left:-150px}
+.orb2{width:500px;height:500px;background:rgba(124,106,247,.05);bottom:-100px;right:-100px}
+
+/* nav */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:58px;background:rgba(8,8,14,.85);backdrop-filter:blur(24px);border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:9px;font-size:14.5px;font-weight:700;letter-spacing:-.3px;color:var(--text)}
+.logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--tg),var(--accent));border-radius:8px;display:flex;align-items:center;justify-content:center}
+.nav-right{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.dot.on{background:var(--success);box-shadow:0 0 8px var(--success)}
+
+/* main */
+main{position:relative;z-index:1;width:100%;max-width:420px;padding:88px 16px 56px;display:flex;flex-direction:column;gap:14px}
+
+/* hero */
+.hero{text-align:center;padding:8px 0 16px}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(42,171,238,.08);border:1px solid rgba(42,171,238,.18);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--tg);font-weight:500;margin-bottom:18px;letter-spacing:.3px}
+.hero h1{font-size:28px;font-weight:800;letter-spacing:-.6px;background:linear-gradient(135deg,var(--text) 40%,var(--tg));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px}
+.hero p{font-size:13.5px;color:var(--muted2);line-height:1.65}
+
+/* card */
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(124,106,247,.25),transparent)}
+
+/* tabs */
+.tabs{display:flex;gap:3px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:3px;margin-bottom:18px}
+.tab{flex:1;padding:8px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .18s;font-family:'Inter',sans-serif}
+.tab.active{background:var(--surface);color:var(--text);border:1px solid var(--border2);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+
+/* field */
+.field{margin-bottom:13px}
+label{display:block;font-size:11px;font-weight:600;color:var(--muted2);margin-bottom:5px;letter-spacing:.5px;text-transform:uppercase}
+input{width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:11px 13px;font-size:14px;color:var(--text);font-family:'Inter',sans-serif;outline:none;transition:border-color .18s,box-shadow .18s}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,106,247,.1)}
+input::placeholder{color:var(--muted)}
+
+/* btn */
+.btn{width:100%;padding:12px;border-radius:9px;font-size:13.5px;font-weight:600;cursor:pointer;border:none;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .18s;font-family:'Inter',sans-serif}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 4px 18px rgba(124,106,247,.22)}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 22px rgba(124,106,247,.32)}
+.btn-tg{background:linear-gradient(135deg,var(--tg),var(--tg2));color:#fff;box-shadow:0 4px 18px rgba(42,171,238,.18)}
+.btn-tg:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 22px rgba(42,171,238,.28)}
+.btn-ghost{background:transparent;color:var(--muted2);border:1px solid var(--border2)}
+.btn-ghost:hover:not(:disabled){background:rgba(255,255,255,.04);color:var(--text)}
+.btn-danger{background:rgba(239,68,68,.08);color:var(--error);border:1px solid rgba(239,68,68,.2)}
+.btn-danger:hover:not(:disabled){background:rgba(239,68,68,.14)}
+.btn-sm{width:auto;padding:8px 14px;font-size:12px}
+
+/* card header */
+.ch{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.ci{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ci-tg{background:rgba(42,171,238,.1);border:1px solid rgba(42,171,238,.2)}
+.ci-ok{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2)}
+.ci-info{background:rgba(124,106,247,.1);border:1px solid rgba(124,106,247,.2)}
+.ct{font-size:13.5px;font-weight:600}
+.cs{font-size:11.5px;color:var(--muted);margin-top:2px}
+
+/* progress */
+.prog{display:flex;align-items:center;margin-bottom:18px}
+.pn{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:1px solid var(--border2);color:var(--muted);background:var(--surface);flex-shrink:0;transition:all .2s}
+.pn.act{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 12px rgba(124,106,247,.4)}
+.pn.done{background:var(--success);border-color:var(--success);color:#fff}
+.pl{font-size:11px;color:var(--muted);margin-left:6px;transition:color .2s}
+.pl.act{color:var(--text);font-weight:500}
+.pline{flex:1;height:1px;background:var(--border2);margin:0 10px}
+
+/* info box */
+.ib{background:rgba(42,171,238,.05);border:1px solid rgba(42,171,238,.12);border-radius:9px;padding:11px 13px;font-size:12.5px;color:var(--muted2);line-height:1.6;display:flex;gap:9px;margin-bottom:14px}
+.ib .ii{flex-shrink:0;margin-top:1px}
+
+/* otp input */
+.otp-input{font-family:'JetBrains Mono',monospace!important;font-size:24px!important;letter-spacing:10px!important;text-align:center!important}
+
+/* profile row */
+.prow{display:flex;align-items:center;gap:12px;padding:12px 13px;background:var(--surface);border:1px solid var(--border2);border-radius:9px}
+.av{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--tg),var(--accent));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0}
+.pname{font-size:14px;font-weight:600}
+.pemail{font-size:11.5px;color:var(--muted);margin-top:1px}
+.prow .btn-ghost{margin-left:auto}
+
+/* tg connected badge */
+.tg-badge{display:flex;align-items:center;gap:9px;background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.15);border-radius:9px;padding:10px 13px;font-size:13px;color:var(--success);font-weight:500}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 0 0 rgba(34,197,94,.4);animation:pulse 2s infinite;flex-shrink:0}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+
+/* grid */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:13px}
+.sbox{background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:12px;text-align:center}
+.sv{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace}
+.sl{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* session box */
+.sess{background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:11px 13px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--tg);word-break:break-all;line-height:1.5;max-height:72px;overflow:hidden;position:relative;margin:13px 0}
+.sess::after{content:'';position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(transparent,var(--surface))}
+
+/* action row */
+.arow{display:flex;gap:8px;margin-top:4px}
+
+/* spinner */
+.spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:sp .65s linear infinite;flex-shrink:0}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* toast */
+#tc{position:fixed;top:68px;right:14px;z-index:999;display:flex;flex-direction:column;gap:8px;max-width:300px}
+.toast{display:flex;align-items:flex-start;gap:9px;background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:11px 13px;font-size:12.5px;box-shadow:0 10px 35px rgba(0,0,0,.5);animation:tin .22s ease}
+.toast.success{border-left:3px solid var(--success)}
+.toast.error{border-left:3px solid var(--error)}
+.toast.warn{border-left:3px solid var(--warn)}
+.toast.info{border-left:3px solid var(--tg)}
+.ti{font-size:14px;flex-shrink:0;margin-top:1px}
+.tt{font-weight:600;color:var(--text)}
+.tm{color:var(--muted2);margin-top:2px;font-size:11.5px;line-height:1.5}
+@keyframes tin{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+
+.hidden{display:none!important}
+
+footer{position:relative;z-index:1;padding:16px;text-align:center;font-size:11px;color:var(--muted)}
+footer b{color:var(--muted2)}
+
+@media(max-width:440px){
+  nav{padding:0 14px}
+  main{padding:78px 12px 40px}
+  .card{padding:16px}
+}
+</style>
+</head>
+<body>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div id="tc"></div>
+
+<nav>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg width="17" height="17" fill="#fff" viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.19 13.668l-2.93-.916c-.638-.197-.65-.638.136-.943l11.437-4.41c.537-.194 1.006.131.833.943l-.772-.121z"/></svg>
+    </div>
+    TGBridge
+  </div>
+  <div class="nav-right">
+    <div class="dot" id="ndot"></div>
+    <span id="ntxt">offline</span>
+  </div>
+</nav>
+
+<main>
+
+<!-- ══════ AUTH ══════ -->
+<div id="auth-panel">
+  <div class="hero">
+    <div class="hero-badge">
+      <svg width="10" height="10" fill="var(--tg)" viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.19 13.668l-2.93-.916c-.638-.197-.65-.638.136-.943l11.437-4.41c.537-.194 1.006.131.833.943l-.772-.121z"/></svg>
+      Telegram Session Manager
+    </div>
+    <h1>TGBridge</h1>
+    <p>Connect once. Access your Telegram<br>session from any device, anytime.</p>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('login')">Sign In</button>
+      <button class="tab" onclick="switchTab('register')">Register</button>
+    </div>
+
+    <div id="tl">
+      <div class="field"><label>Email</label><input type="email" id="le" placeholder="you@example.com" autocomplete="email"/></div>
+      <div class="field"><label>Password</label><input type="password" id="lp" placeholder="••••••••" autocomplete="current-password"/></div>
+      <button class="btn btn-primary" id="bl" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <div id="tr" class="hidden">
+      <div class="field"><label>Email</label><input type="email" id="re" placeholder="you@example.com" autocomplete="email"/></div>
+      <div class="field"><label>Password</label><input type="password" id="rp" placeholder="Min 6 characters" autocomplete="new-password"/></div>
+      <button class="btn btn-primary" id="br" onclick="doRegister()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ DASHBOARD ══════ -->
+<div id="dashboard" class="hidden">
+
+  <!-- Profile -->
+  <div class="card">
+    <div class="prow">
+      <div class="av" id="uav">U</div>
+      <div><div class="pname" id="uname">User</div><div class="pemail" id="uemail">—</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+
+  <!-- TG Setup -->
+  <div id="tg-setup" class="card hidden">
+    <div class="ch">
+      <div class="ci ci-tg">
+        <svg width="16" height="16" fill="var(--tg)" viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.19 13.668l-2.93-.916c-.638-.197-.65-.638.136-.943l11.437-4.41c.537-.194 1.006.131.833.943l-.772-.121z"/></svg>
+      </div>
+      <div><div class="ct">Connect Telegram</div><div class="cs">One-time login to save your session</div></div>
+    </div>
+
+    <div class="prog">
+      <div class="pn act" id="p1">1</div><div class="pl act" id="p1l">Phone</div>
+      <div class="pline"></div>
+      <div class="pn" id="p2">2</div><div class="pl" id="p2l">Verify</div>
+      <div class="pline"></div>
+      <div class="pn" id="p3">3</div><div class="pl" id="p3l">Done</div>
+    </div>
+
+    <!-- Step 1 -->
+    <div id="s1">
+      <div class="ib"><div class="ii">📱</div><div>Enter your Telegram phone with country code. You'll receive a verification code in your Telegram app.</div></div>
+      <div class="field"><label>Phone Number</label><input type="tel" id="tgphone" placeholder="+8801XXXXXXXXX"/></div>
+      <button class="btn btn-tg" id="bsc" onclick="sendCode()">Send Verification Code</button>
+    </div>
+
+    <!-- Step 2 -->
+    <div id="s2" class="hidden">
+      <div class="ib"><div class="ii">✅</div><div>Check your Telegram app — a 5-digit code was sent to you.</div></div>
+      <div class="field"><label>Verification Code</label><input type="text" id="tgcode" placeholder="1 2 3 4 5" maxlength="6" class="otp-input"/></div>
+      <div id="pfield" class="field hidden"><label>2FA Password</label><input type="password" id="tg2fa" placeholder="Your two-factor password"/></div>
+      <button class="btn btn-tg" id="bvc" onclick="verifyCode()">Verify &amp; Save Session</button>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="resetStep()">← Back</button>
+    </div>
+  </div>
+
+  <!-- TG Connected -->
+  <div id="tg-connected" class="card hidden">
+    <div class="ch">
+      <div class="ci ci-ok"><span style="color:var(--success);font-size:14px">✓</span></div>
+      <div><div class="ct">Telegram Connected</div><div class="cs">Session synced to cloud</div></div>
+    </div>
+    <div class="tg-badge"><div class="pulse"></div><span id="tguname">Connected</span></div>
+    <div class="g2">
+      <div class="sbox"><div class="sv" id="tgphone2">—</div><div class="sl">Phone</div></div>
+      <div class="sbox"><div class="sv" style="color:var(--success)">Active</div><div class="sl">Session</div></div>
+    </div>
+    <label style="display:block;margin-top:14px;margin-bottom:5px">Saved Session Token</label>
+    <div class="sess" id="sessbox">—</div>
+    <div class="arow">
+      <button class="btn btn-ghost btn-sm" onclick="copySession()">📋 Copy</button>
+      <button class="btn btn-danger btn-sm" onclick="disconnectTg()">Disconnect</button>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div class="card">
+    <div class="ch">
+      <div class="ci ci-info"><span style="font-size:14px">⚡</span></div>
+      <div><div class="ct">How it works</div><div class="cs">Your session, everywhere</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:9px">
+      <div class="ib" style="margin:0"><div class="ii">🔐</div><div><b style="color:var(--text)">One-time setup</b> — Log into Telegram once. Your session string is generated and saved.</div></div>
+      <div class="ib" style="margin:0"><div class="ii">☁️</div><div><b style="color:var(--text)">Cloud backup</b> — Session is stored securely in Firebase, linked to your account.</div></div>
+      <div class="ib" style="margin:0"><div class="ii">📲</div><div><b style="color:var(--text)">Any device</b> — Sign in with email + password anywhere to restore your Telegram session.</div></div>
+    </div>
+  </div>
+
+</div><!-- /dashboard -->
+</main>
+
+<footer>TGBridge v1.0 · Built with <b>Firebase</b> · <b>GramJS</b> · <b>Vercel</b></footer>
+
+<script>
+// ════════════════════════════════════════════
+// 🔴 REPLACE WITH YOUR VALUES
+// ════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey:            "YOUR_FIREBASE_API_KEY",
+  authDomain:        "YOUR_PROJECT.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+// Your Vercel deployment URL (no trailing slash)
+// e.g. "https://tgbridge.vercel.app"
+const BASE_URL = "";   // leave empty "" to auto-detect
+// ════════════════════════════════════════════
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+function apiBase() {
+  return BASE_URL || window.location.origin;
+}
+
+// ── unique session id for this browser tab ─
+const tabSessionId = Math.random().toString(36).slice(2) + Date.now();
+
+// ── Toast ─────────────────────────────────
+function toast(type, title, msg) {
+  const icons = {success:'✅',error:'❌',warn:'⚠️',info:'💬'};
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<div class="ti">${icons[type]}</div><div><div class="tt">${title}</div>${msg?`<div class="tm">${msg}</div>`:''}</div>`;
+  document.getElementById('tc').prepend(el);
+  setTimeout(()=>el.remove(), 5000);
+}
+
+// ── Tab switch ────────────────────────────
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',(t==='login'&&i===0)||(t==='register'&&i===1)));
+  document.getElementById('tl').classList.toggle('hidden', t!=='login');
+  document.getElementById('tr').classList.toggle('hidden', t!=='register');
+}
+
+// ── Btn loading ───────────────────────────
+function setBtn(id, loading, txt) {
+  const b = document.getElementById(id);
+  b.disabled = loading;
+  b.innerHTML = loading ? `<div class="spin"></div>${txt||'Please wait…'}` : txt;
+}
+
+// ── Auth ──────────────────────────────────
+async function doLogin() {
+  const e = document.getElementById('le').value.trim();
+  const p = document.getElementById('lp').value;
+  if (!e||!p) return toast('warn','Missing fields','Enter email and password.');
+  setBtn('bl', true, 'Signing in…');
+  try { await auth.signInWithEmailAndPassword(e,p); }
+  catch(err) { toast('error','Login failed', err.message); setBtn('bl',false,'Sign In'); }
+}
+
+async function doRegister() {
+  const e = document.getElementById('re').value.trim();
+  const p = document.getElementById('rp').value;
+  if (!e||!p) return toast('warn','Missing fields','Enter email and password.');
+  if (p.length<6) return toast('warn','Weak password','Minimum 6 characters required.');
+  setBtn('br', true, 'Creating account…');
+  try { await auth.createUserWithEmailAndPassword(e,p); }
+  catch(err) { toast('error','Register failed', err.message); setBtn('br',false,'Create Account'); }
+}
+
+function doLogout() { auth.signOut(); }
+
+// ── Auth state ────────────────────────────
+auth.onAuthStateChanged(async user => {
+  const ap = document.getElementById('auth-panel');
+  const db2= document.getElementById('dashboard');
+  if (user) {
+    ap.classList.add('hidden');
+    db2.classList.remove('hidden');
+    document.getElementById('uav').textContent   = user.email[0].toUpperCase();
+    document.getElementById('uname').textContent = user.displayName || user.email.split('@')[0];
+    document.getElementById('uemail').textContent= user.email;
+    document.getElementById('ndot').classList.add('on');
+    document.getElementById('ntxt').textContent  = user.email.split('@')[0];
+    await loadSession(user.uid);
+  } else {
+    ap.classList.remove('hidden');
+    db2.classList.add('hidden');
+    document.getElementById('ndot').classList.remove('on');
+    document.getElementById('ntxt').textContent = 'offline';
+    setBtn('bl',false,'Sign In');
+    setBtn('br',false,'Create Account');
+  }
+});
+
+// ── Load Telegram session from Firestore ──
+async function loadSession(uid) {
+  const setup = document.getElementById('tg-setup');
+  const conn  = document.getElementById('tg-connected');
+  try {
+    const snap = await db.collection('telegram_sessions').doc(uid).get();
+    if (snap.exists) {
+      const d = snap.data();
+      conn.classList.remove('hidden');
+      setup.classList.add('hidden');
+      document.getElementById('tguname').textContent  = d.username || 'Telegram User';
+      document.getElementById('tgphone2').textContent = d.phone    || '—';
+      document.getElementById('sessbox').textContent  = d.session  || '—';
+    } else {
+      setup.classList.remove('hidden');
+      conn.classList.add('hidden');
+    }
+  } catch(e) {
+    setup.classList.remove('hidden');
+    conn.classList.add('hidden');
+  }
+}
+
+// ── Progress steps ─────────────────────────
+function setStep(n) {
+  for (let i=1;i<=3;i++) {
+    const pn = document.getElementById(`p${i}`);
+    const pl = document.getElementById(`p${i}l`);
+    if (i<n)      { pn.className='pn done'; pn.textContent='✓'; pl.className='pl'; }
+    else if(i===n){ pn.className='pn act';  pn.textContent=i;   pl.className='pl act'; }
+    else          { pn.className='pn';      pn.textContent=i;   pl.className='pl'; }
+  }
+}
+
+// ── Send OTP via Vercel API ───────────────
+async function sendCode() {
+  const phone = document.getElementById('tgphone').value.trim();
+  if (!phone) return toast('warn','Required','Enter your phone number.');
+  if (!phone.startsWith('+')) return toast('warn','Format error','Start with + and country code. e.g. +880...');
+
+  setBtn('bsc', true, 'Sending code…');
+  try {
+    const r = await fetch(`${apiBase()}/api/tg-send-code`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ phone, sessionId: tabSessionId })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Failed');
+
+    // Show step 2
+    document.getElementById('s1').classList.add('hidden');
+    document.getElementById('s2').classList.remove('hidden');
+    setStep(2);
+    setBtn('bvc', false, 'Verify & Save Session');
+    toast('info','Code sent','Check your Telegram app for the verification code.');
+  } catch(e) {
+    toast('error','Error', e.message);
+    setBtn('bsc', false, 'Send Verification Code');
+  }
+}
+
+// ── Verify OTP via Vercel API ─────────────
+async function verifyCode() {
+  const code     = document.getElementById('tgcode').value.trim();
+  const password = document.getElementById('tg2fa').value;
+  if (!code) return toast('warn','Required','Enter the verification code.');
+
+  setBtn('bvc', true, 'Verifying…');
+  setStep(3);
+
+  try {
+    const r = await fetch(`${apiBase()}/api/tg-verify-code`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ sessionId: tabSessionId, code, password: password||undefined })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Verification failed');
+
+    if (d.need2fa) {
+      document.getElementById('pfield').classList.remove('hidden');
+      toast('warn','2FA Required','Enter your two-factor authentication password.');
+      setBtn('bvc', false, 'Verify & Save Session');
+      setStep(2);
+      return;
+    }
+
+    // Save to Firestore
+    const uid = auth.currentUser.uid;
+    await db.collection('telegram_sessions').doc(uid).set({
+      session:   d.session,
+      phone:     d.phone,
+      username:  d.username,
+      firstName: d.firstName,
+      savedAt:   firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    toast('success','Connected!', `Welcome, ${d.username}`);
+    resetStep();
+    await loadSession(uid);
+
+  } catch(e) {
+    toast('error','Error', e.message);
+    setBtn('bvc', false, 'Verify & Save Session');
+    setStep(2);
+  }
+}
+
+function resetStep() {
+  document.getElementById('s1').classList.remove('hidden');
+  document.getElementById('s2').classList.add('hidden');
+  document.getElementById('pfield').classList.add('hidden');
+  document.getElementById('tgphone').value = '';
+  document.getElementById('tgcode').value  = '';
+  document.getElementById('tg2fa').value   = '';
+  setBtn('bsc', false, 'Send Verification Code');
+  setStep(1);
+}
+
+// ── Session actions ───────────────────────
+async function copySession() {
+  const t = document.getElementById('sessbox').textContent;
+  try { await navigator.clipboard.writeText(t); toast('success','Copied!','Session string copied.'); }
+  catch { toast('error','Failed','Cannot copy.'); }
+}
+
+async function disconnectTg() {
+  if (!confirm('Remove your saved Telegram session?')) return;
+  const uid = auth.currentUser?.uid;
+  if (!uid) return;
+  await db.collection('telegram_sessions').doc(uid).delete();
+  toast('info','Disconnected','Session removed from cloud.');
+  await loadSession(uid);
+}
+
+// ── Enter key ─────────────────────────────
+document.getElementById('lp').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('rp').addEventListener('keydown', e=>{ if(e.key==='Enter') doRegister(); });
+document.getElementById('tgcode').addEventListener('keydown', e=>{ if(e.key==='Enter') verifyCode(); });
+</script>
+</body>
+</html>
